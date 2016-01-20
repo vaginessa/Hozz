@@ -34,10 +34,12 @@ const codemirrorOptions = {
 class Editor extends Component {
     constructor(props) {
         super(props);
-        this.codemirrorOptions = codemirrorOptions;
         this.state = {
             value: props.value
         };
+        this.codemirrorOptions = Object.assign({}, codemirrorOptions, {
+            readOnly: props.readOnly
+        });
     }
 
     componentWillReceiveProps (props) {

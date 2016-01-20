@@ -3,8 +3,9 @@ import UID from 'uid';
 
 import io from './io';
 import log from './log';
+import Lang from './language';
 import { HOSTS_COUNT_MATHER,
-         TOTAL_HOSTS_UID,
+         MERGED_HOSTS_UID,
          WORKSPACE } from '../constants';
 
 const countRules = (text) => {
@@ -19,30 +20,32 @@ const countRules = (text) => {
 class Hosts {
     constructor (options) {
         const { index, uid, name, online, url, count, text } = options;
-        this.index = index || 0;
-        this.uid = uid || UID(16);
-        this.name = name || '';
+        this.index  = index || 0;
+        this.uid    = uid || UID(16);
+        this.url    = url || '';
+        this.name   = name || '';
+        this.count  = count || 0;
         this.online = online || false;
-        this.url = url || '';
-        this.count = count || 0;
-        if (uid === TOTAL_HOSTS_UID) {
+        if (uid === MERGED_HOSTS_UID) {
             this.text = text;
         } else {
             this.setText(text || '');
         }
-        this.isSyncing = false;
+        this.__syncing = false;
     }
 
     toObject () {
-        return {
-            uid:    this.uid,
-            url:    this.url,
-            name:   this.name,
-            text:   this.text,
-            index:  this.index,
-            online: this.online,
-            count:  this.count,
-        };
+        const obj = {};
+        for (let key in this) {
+            if (this.hasOwnProperty(key) && key.slice(0, 2) !== '__' && key !== 'text') {
+                if (key === 'online' && typeof(this.__online) !== 'undefined') {
+                    obj[key] = this.__online;
+                } else {
+                    obj[key] = this[key];
+                }
+            }
+        }
+        return obj;
     }
 
     setText (text) {
@@ -50,8 +53,12 @@ class Hosts {
         this.count = countRules(text);
     }
 
-    toggleStatus () {
-        this.online = !this.online;
+    isSyncing () {
+        return this.__syncing;
+    }
+
+    setSyncing (syncing) {
+        this.__syncing = syncing;
     }
 
     stashStatus () {
@@ -69,21 +76,21 @@ class Hosts {
     }
 
     save () {
-        if (!this.uid || this.uid === TOTAL_HOSTS_UID) {
+        if (!this.uid || this.uid === MERGED_HOSTS_UID) {
             return Promise.resolve();
         }
         return io.writeFile(path.join(WORKSPACE, this.uid), this.text);
     }
 
     remove () {
-        if (!this.uid || this.uid === TOTAL_HOSTS_UID) {
+        if (!this.uid || this.uid === MERGED_HOSTS_UID) {
             return Promise.resolve();
         }
         return io.unlink(path.join(WORKSPACE, this.uid));
     }
 
     load () {
-        if (this.uid && this.uid !== TOTAL_HOSTS_UID) {
+        if (this.uid && this.uid !== MERGED_HOSTS_UID) {
             return io.readFile(path.join(WORKSPACE, this.uid), 'utf-8').then((text) => {
                 this.setText(text);
                 return Promise.resolve();
@@ -92,31 +99,14 @@ class Hosts {
             return Promise.resolve();
         }
     }
-
-    updateFromUrl () {
-        if (this.url) {
-            this.isSyncing = true;
-            return io.requestUrl(this.url).then((text) => {
-                this.setText(text);
-                this.isSyncing = false;
-                return this.save();
-            }).catch((error) => {
-                log(error);
-                this.isSyncing = false;
-                return Promise.resolve();
-            });
-        } else {
-            return Promise.resolve();
-        }
-    }
 }
 
 Hosts.createFromText = (text) => {
     return new Hosts({
-        name: 'New Hosts',
-        online: false,
-        url: '',
         text,
+        url: '',
+        online: false,
+        name: Lang.get('main.untitled_hosts'),
     });
 }
 

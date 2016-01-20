@@ -6,7 +6,7 @@ import log from './log';
 import Hosts from './hosts';
 import { MANIFEST,
          WORKSPACE,
-         TOTAL_HOSTS_UID,
+         MERGED_HOSTS_UID,
          NO_PERM_ERROR_TAG,
          NO_PERM_ERROR_TAG_WIN32 } from '../constants';
 
@@ -102,7 +102,7 @@ class Manifest {
             }
         }
         return new Hosts({
-            uid: TOTAL_HOSTS_UID,
+            uid: MERGED_HOSTS_UID,
             name: 'All',
             count: totalCount,
             text: totalHostsText,

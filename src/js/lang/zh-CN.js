@@ -10,6 +10,7 @@ export default {
 
         'name': '名称',
         'search': '搜索',
+        'system_hosts': '系统Hosts',
 
         'text': '文本文件',
         'all_files': '所有文件',
@@ -30,6 +31,8 @@ export default {
         'go_to_homepage': '请前往$$1下载最新更新。',
     },
     main: {
+        'untitled_hosts': '未命名Hosts',
+
         'grant_permission': '授予权限',
         'dont_have_permission': '你没有写入系统Hosts文件的权限。',
 

@@ -16,7 +16,7 @@ export const WORKSPACE = path.join(USER_HOME, '.' + APP_NAME);
 export const MANIFEST  = path.join(WORKSPACE, './manifest.json');
 export const LOG       = path.join(WORKSPACE, './log.txt');
 
-export const TOTAL_HOSTS_UID = 'TOTAL_HOSTS_UID';
+export const MERGED_HOSTS_UID = 'MERGED_HOSTS_UID';
 export const NO_PERM_ERROR_TAG = 'EACCES';
 export const NO_PERM_ERROR_TAG_WIN32 = 'EPERM';
 

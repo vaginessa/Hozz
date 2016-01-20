@@ -1,15 +1,32 @@
 import React, { Component, PropTypes } from 'react';
+import dragula from 'react-dragula';
 
 import event from '../backend/event';
-import { EVENT, TOTAL_HOSTS_UID } from '../constants';
+import Hosts from '../backend/hosts';
+import { EVENT, MERGED_HOSTS_UID } from '../constants';
+
+import { addHosts,
+         updateHosts,
+         removeHosts,
+         selectHosts,
+         callAddHosts,
+         setWholeOnline,
+         callUpdateHosts,
+         switchHostsPosition } from '../actions/main';
 
 import SearchBox from './SearchBox';
 import SidebarItem from './SidebarItem';
 import HostsInfoDialog from './HostsInfoDialog';
 
+const getPosition = (element) => {
+    return Array.prototype.slice.call(element.parentElement.children).indexOf(element);
+}
+
 class Sidebar extends Component {
     constructor(props) {
         super(props);
+        this.__dragStartPosition = -1;
+        this.__dragEndPosition = -1;
         this.state = {
             isAddingHosts: false,
             isEditingHosts: false,
@@ -17,34 +34,50 @@ class Sidebar extends Component {
         }
     }
 
+    componentDidMount () {
+        const { dispatch } = this.props;
+        const drake = dragula([document.querySelector('.sidebar-list-dragable')]);
+        drake.on('drag', (element) => {
+            this.__dragStartPosition = getPosition(element);
+        });
+        drake.on('drop', (element) => {
+            this.__dragEndPosition = getPosition(element);
+            drake.cancel(true);
+        });
+        drake.on('cancel', (element) => {
+            if (this.__dragStartPosition > -1 && this.__dragEndPosition > -1) {
+                dispatch(switchHostsPosition(this.__dragStartPosition, this.__dragEndPosition));
+            }
+            this.__dragStartPosition = -1;
+            this.__dragEndPosition = -1;
+        });
+    }
+
     componentWillReceiveProps (nextProps) {
-        const { editingHosts } = nextProps;
+        const { updatingHosts } = nextProps;
         const { isAddingHosts, isEditingHosts } = this.state;
-        if (!isAddingHosts && !isEditingHosts && nextProps.editingHosts) {
+        if (!isAddingHosts && !isEditingHosts && nextProps.updatingHosts) {
             this.setState({
                 isEditingHosts: true,
                 nextHosts: {
-                    url: editingHosts.url,
-                    name: editingHosts.name,
+                    url: updatingHosts.url,
+                    name: updatingHosts.name,
                 },
             });
         }
     }
 
-    __onItemClick (item) {
-        const { onItemClick } = this.props;
-        onItemClick && onItemClick(item);
-    }
-
     __onHostsDialogOKClick () {
+        const { dispatch, updatingHosts } = this.props;
         const { isAddingHosts, isEditingHosts, nextHosts } = this.state;
-        const { editingHosts, onAddHostsClick, onUpdateHostsClick } = this.props;
-        if (isAddingHosts && onAddHostsClick) {
-            onAddHostsClick(nextHosts);
-        } else if (isEditingHosts && onUpdateHostsClick) {
-            editingHosts.url = nextHosts.url.trim();
-            editingHosts.name = nextHosts.name.trim();
-            onUpdateHostsClick(editingHosts);
+        if (isAddingHosts) {
+            nextHosts.name && dispatch(addHosts(new Hosts(nextHosts)));
+            dispatch(callAddHosts(''));
+        } else if (isEditingHosts) {
+            const { uid } = updatingHosts;
+            const { name, url } = nextHosts;
+            name && dispatch(updateHosts({ uid, name, url }));
+            dispatch(callUpdateHosts(''));
         }
         this.setState({
             isAddingHosts: false,
@@ -65,13 +98,9 @@ class Sidebar extends Component {
     }
 
     __onDialogDismiss () {
-        const { isAddingHosts, isEditingHosts, nextHosts } = this.state;
-        const { editingHosts, onAddHostsClick, onUpdateHostsClick } = this.props;
-        if (isAddingHosts && onAddHostsClick) {
-            onAddHostsClick(null);
-        } else if (isEditingHosts && onUpdateHostsClick) {
-            onUpdateHostsClick(null);
-        }
+        const { dispatch } = this.props;
+        dispatch(callAddHosts(''));
+        dispatch(callUpdateHosts(''));
         this.setState({
             isAddingHosts: false,
             isEditingHosts: false,
@@ -83,24 +112,46 @@ class Sidebar extends Component {
         event.emit(EVENT.OPEN_SETTINGS_WINDOW);
     }
 
+    __onItemClick (uid) {
+        this.props.dispatch(selectHosts(uid));
+    }
+
+    __onItemEdit (uid) {
+        this.props.dispatch(callUpdateHosts(uid));
+    }
+
+    __onItemRemove (uid) {
+        this.props.dispatch(removeHosts(uid));
+    }
+
+    __onItemStatusChange (uid, online) {
+        const { dispatch, mergedHosts } = this.props;
+        if (uid === MERGED_HOSTS_UID) {
+            dispatch(setWholeOnline(online));
+        } else if (mergedHosts.online) {
+            dispatch(updateHosts({ uid, online }))
+        }
+    }
+
     __renderSidebarItem (item) {
-        const { activeUid, onItemEdit, onItemRemove, onItemStatusChange } = this.props;
+        const { activeUid } = this.props;
         if (!item) {
             return null;
         }
+        const { uid } = item;
         return (<SidebarItem
+                    key={ uid }
                     item={ item }
-                    key={ item.uid }
-                    active={ activeUid === item.uid }
-                    onClick={ this.__onItemClick.bind(this, item) }
-                    onStatusChange={ onItemStatusChange.bind(null, item) }
-                    onEdit={ item.uid !== TOTAL_HOSTS_UID ? onItemEdit.bind(null, item) : null }
-                    onRemove={ item.uid !== TOTAL_HOSTS_UID ? onItemRemove.bind(null, item) : null } />)
+                    active={ activeUid === uid }
+                    onClick={ this.__onItemClick.bind(this, uid) }
+                    onStatusChange={ this.__onItemStatusChange.bind(this, uid, !item.online) }
+                    onEdit={ uid !== MERGED_HOSTS_UID ? this.__onItemEdit.bind(this, uid) : null }
+                    onRemove={ uid !== MERGED_HOSTS_UID ? this.__onItemRemove.bind(this, uid): null } />);
     }
 
     render() {
-        const { isAddingHosts, isEditingHosts } = this.state;
-        const { list, totalHosts, editingHosts, onSearchChange } = this.props;
+        const { isAddingHosts, isEditingHosts, nextHosts } = this.state;
+        const { list, mergedHosts, updatingHosts, onSearchChange } = this.props;
         const sidebarItems = list.map((item, index) => {
             return this.__renderSidebarItem(item);
         });
@@ -110,7 +161,7 @@ class Sidebar extends Component {
         return (<div className="sidebar">
                     <SearchBox className="sidebar-search" onTextChange={ onSearchChange } />
                     <div className="sidebar-list">
-                        { this.__renderSidebarItem(totalHosts) }
+                        { this.__renderSidebarItem(mergedHosts) }
                         <div className="sidebar-list-dragable">
                             { sidebarItems }
                         </div>
@@ -123,8 +174,8 @@ class Sidebar extends Component {
                     </div>
                     { isAddingHosts || isEditingHosts ?
                         <HostsInfoDialog
-                            url={ editingHosts ? editingHosts.url : '' }
-                            name={ editingHosts ? editingHosts.name : '' }
+                            url={ nextHosts ? nextHosts.url : '' }
+                            name={ nextHosts ? nextHosts.name : '' }
                             onDismiss={ this.__onDialogDismiss.bind(this) }
                             onInputChange={ this.__onDialogInputChange.bind(this) } /> : null }
                 </div>);
@@ -133,16 +184,11 @@ class Sidebar extends Component {
 
 Sidebar.propTypes = {
     list: PropTypes.array,
-    onItemEdit: PropTypes.func,
-    onItemClick: PropTypes.func,
+    dispatch: PropTypes.func,
     activeUid: PropTypes.string,
-    onItemRemove: PropTypes.func,
-    totalHosts: PropTypes.object,
-    editingHosts: PropTypes.object,
     onSearchChange: PropTypes.func,
-    onAddHostsClick: PropTypes.func,
-    onUpdateHostsClick: PropTypes.func,
-    onItemStatusChange: PropTypes.func,
+    mergedHosts: PropTypes.instanceOf(Hosts),
+    updatingHosts: PropTypes.instanceOf(Hosts),
 };
 
 export default Sidebar;

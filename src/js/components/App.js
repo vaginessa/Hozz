@@ -1,10 +1,10 @@
 import React, { Component, PropTypes } from 'react';
+import { connect } from 'react-redux';
 import Dropzone from 'react-dropzone';
-import dragula from 'react-dragula';
 
 import { EVENT,
          APP_NAME,
-         TOTAL_HOSTS_UID,
+         MERGED_HOSTS_UID,
          NO_PERM_ERROR_TAG,
          NO_PERM_ERROR_TAG_WIN32 } from '../constants';
 
@@ -15,94 +15,61 @@ import Lang from '../backend/language';
 import nw from '../backend/nw.interface';
 import permission from '../backend/permission';
 
+import { addHosts,
+         mergeHosts,
+         updateHosts,
+         hostsMapToList,
+         setWholeOnline } from '../actions/main';
+
 import Editor from './Editor';
 import Sidebar from './Sidebar';
 import Titlebar from './Titlebar';
 import SnackBar from './SnackBar';
 
-const getPosition = (element) => {
-    return Array.prototype.slice.call(element.parentElement.children).indexOf(element);
-}
-
 class App extends Component {
     constructor(props) {
         super(props);
-        this.totalHosts = null;
-        this.dragStartPosition = -1;
         this.state = {
             snack: null,
-            manifest: null,
-            activeUid: null,
-            editingUid: null,
             searchText: '',
         }
     }
 
-    componentDidMount () {
-        const { manifest } = this.props;
-        const updateRemoteHosts = manifest.getHostsList().map((hosts) => {
-            return hosts.updateFromUrl().then(() => {
-                this.__updateManifest(manifest);
-            });
-        });
-        this.__updateManifest(manifest);
-        Promise.all(updateRemoteHosts).then(() => {
-            event.emit(EVENT.INITIAL_CLOUD_HOSTS_UPDATED);
-        });
-
-        const drake = dragula([document.querySelector('.sidebar-list-dragable')]);
-        drake.on('drag', (element) => {
-            this.dragStartPosition = getPosition(element);
-        });
-        drake.on('drop', (element) => {
-            const { manifest } = this.state;
-            if (manifest && this.dragStartPosition > -1) {
-                manifest.moveHostsIndex(this.dragStartPosition, getPosition(element));
-                manifest.commit();
-            }
-            drake.cancel(true);
-            this.__updateManifest(manifest, false);
-        });
-        drake.on('cancel', (element) => {
-            this.dragStartPosition = -1;
-        });
+    shouldComponentUpdate (nextProps, nextState) {
+        if (this.props.language !== nextProps.language) {
+            Lang.setLocale(nextProps.language);
+        }
+        // TODO: Use Immutable
+        if (this.props != nextProps || this.state != nextState) {
+            return true;
+        }
+        return false;
     }
 
-    __updateManifest (manifest) {
-        this.totalHosts = manifest.getMergedHosts();
-        manifest.saveSysHosts(this.totalHosts).catch((error) => {
-            if (error.message.indexOf(NO_PERM_ERROR_TAG) > -1 ||
-                error.message.indexOf(NO_PERM_ERROR_TAG_WIN32) > -1) {
-                this.__onPermissionError();
-            }
-        });
-        this.__createHostsTrayMenu(manifest);
-        this.setState({ manifest });
+    componentWillReceiveProps (nextProps) {
+        this.__createHostsTrayMenu(nextProps);
     }
 
-    __createHostsTrayMenu (manifest) {
+    __createHostsTrayMenu (props) {
         const menus = [];
-        menus.push({
-            label: this.totalHosts.name,
-            type: 'checkbox',
-            checked: this.totalHosts.online,
-            click: () => {
-                manifest.online = !manifest.online;
-                manifest.commit();
-                this.__updateManifest(manifest);
-            }
-        });
-        for (let hosts of manifest.getHostsList()) {
+        const { dispatch, online, hosts, mergedHosts } = props;
+        if (mergedHosts) {
             menus.push({
-                label: hosts.name,
                 type: 'checkbox',
-                checked: hosts.online,
+                label: mergedHosts.name,
+                checked: mergedHosts.online,
                 click: () => {
-                    if (manifest.online) {
-                        hosts.toggleStatus();
-                        manifest.commit();
-                    }
-                    this.__updateManifest(manifest);
+                    dispatch(setWholeOnline(!online));
+                }
+            });
+        }
+        for (let __hosts of hosts) {
+            menus.push({
+                type: 'checkbox',
+                label: __hosts.name,
+                checked: __hosts.online,
+                click: () => {
+                    dispatch(updateHosts({ uid: __hosts.uid, online: online && !__hosts.online }));
                 }
             });
         }
@@ -110,78 +77,7 @@ class App extends Component {
     }
 
     __updateHosts (uid, text) {
-        const { manifest } = this.state;
-        const hosts = manifest.getHostsByUid(uid);
-        if (uid !== TOTAL_HOSTS_UID && hosts) {
-            hosts.setText(text);
-            hosts.save();
-            manifest.commit();
-            this.__updateManifest(manifest);
-        }
-    }
-
-    __onHostsClick (item) {
-        this.setState({ activeUid: item.uid });
-    }
-
-    __onHostsRemove (item) {
-        const { manifest } = this.state;
-        manifest.removeHosts(item).commit();
-        item.remove().then(() => {
-            this.__updateManifest(manifest);
-        });
-    }
-
-    __onHostsStatusChange (item) {
-        const { manifest } = this.state;
-        if (item.uid !== TOTAL_HOSTS_UID) {
-            if (manifest.online) {
-                manifest.getHostsByUid(item.uid).toggleStatus();
-                manifest.commit();
-                this.__updateManifest(manifest);
-            }
-        } else {
-            manifest.online = !manifest.online;
-            manifest.commit();
-            this.__updateManifest(manifest);
-        }
-    }
-
-    __createNewHosts (options) {
-        const { manifest } = this.state;
-        if (options && options.name) {
-            const hosts = new Hosts(options);
-            if (hosts.url) {
-                hosts.updateFromUrl().then(() => {
-                    this.__updateManifest(manifest);
-                });
-            } else {
-                hosts.save();
-            }
-            manifest.addHosts(hosts).commit();
-            this.__updateManifest(manifest);
-        }
-    }
-
-    __onUpdateHostsClick (nextHosts) {
-        const { manifest } = this.state;
-        if (nextHosts && nextHosts.name) {
-            if (nextHosts.url) {
-                nextHosts.updateFromUrl().then(() => {
-                    this.__updateManifest(manifest);
-                });
-            } else {
-                nextHosts.save();
-            }
-            manifest.setHostsByUid(nextHosts.uid, nextHosts);
-            manifest.commit();
-            this.__updateManifest(manifest);
-        }
-        this.setState({ editingUid: null });
-    }
-
-    __onHostsEdit (hosts) {
-        this.setState({ editingUid: hosts.uid });
+        this.props.dispatch(updateHosts({ uid, text }));
     }
 
     __onSearchChange (text) {
@@ -213,37 +109,25 @@ class App extends Component {
     __onDrop (files) {
         const promises = io.readDropFiles(files);
         for (let promise of promises) {
-            promise.then((result) => {
-                this.__createNewHosts(result);
+            promise.then(result => {
+                result && this.props.dispatch(addHosts(new Hosts(result)));
             });
         }
     }
 
     render() {
-        const { snack, manifest, activeUid, editingUid, searchText } = this.state;
-        let list = manifest ? manifest.getHostsList() : [];
+        const { snack, searchText } = this.state;
+        const { dispatch, hosts, mergedHosts, selectedHosts, updatingHosts } = this.props;
+        let list = hosts;
+        const selectedUid = selectedHosts ? selectedHosts.uid : '';
         if (searchText) {
             list = list.filter((hosts) => {
                 return hosts.name.indexOf(searchText) > -1 || hosts.text.indexOf(searchText) > -1;
             });
         }
-        let activeHosts = null;
-        if (activeUid !== null) {
-            if (activeUid !== TOTAL_HOSTS_UID) {
-                activeHosts = manifest.getHostsByUid(activeUid);
-            } else {
-                activeHosts = this.totalHosts;
-            }
-        }
-        let editingHosts = null;
-        if (editingUid !== null) {
-            editingHosts = manifest.getHostsByUid(editingUid);
-        }
         let readOnly = false;
-        if (activeHosts && (TOTAL_HOSTS_UID === activeHosts.uid || activeHosts.url)) {
+        if (selectedHosts && (MERGED_HOSTS_UID === selectedHosts.uid || selectedHosts.url)) {
             readOnly = true;
-        } else {
-            readOnly = false;
         }
         return (<div>
                     <Dropzone
@@ -254,22 +138,17 @@ class App extends Component {
                         <div>
                             <Sidebar
                                 list={ list }
-                                activeUid={ activeUid }
-                                totalHosts={ this.totalHosts }
-                                editingHosts={ editingHosts }
-                                onItemEdit={ this.__onHostsEdit.bind(this) }
-                                onItemClick={ this.__onHostsClick.bind(this) }
-                                onItemRemove={ this.__onHostsRemove.bind(this) }
-                                onSearchChange={ this.__onSearchChange.bind(this) }
-                                onAddHostsClick={ this.__createNewHosts.bind(this) }
-                                onUpdateHostsClick={ this.__onUpdateHostsClick.bind(this) }
-                                onItemStatusChange={ this.__onHostsStatusChange.bind(this) } />
+                                dispatch={ dispatch }
+                                activeUid={ selectedUid }
+                                mergedHosts={ mergedHosts }
+                                updatingHosts={ updatingHosts }
+                                onSearchChange={ this.__onSearchChange.bind(this) } />
                         </div>
                     </Dropzone>
                     <div className="main-container">
                         <Titlebar
                             closeAsHide={ true }
-                            title={ activeHosts ? activeHosts.name : APP_NAME } />
+                            title={ selectedHosts ? selectedHosts.name : APP_NAME } />
                         { snack !== null ?
                             <SnackBar
                                 type={ snack.type }
@@ -277,20 +156,43 @@ class App extends Component {
                                 actions={ snack.actions }
                                 onDismiss={ this.__onSnackDismiss.bind(this) } /> :
                             null }
-                        { activeHosts ?
+                        { selectedHosts ?
                             <Editor
-                                uid={ activeUid }
-                                key={ activeUid }
+                                uid={ selectedUid }
+                                key={ selectedUid }
                                 readOnly={ readOnly }
-                                value={ activeHosts.text }
-                                onTextShouldUpdate={ this.__updateHosts.bind(this) } /> : null }
+                                value={ selectedHosts.text }
+                                onTextShouldUpdate={ !readOnly ? this.__updateHosts.bind(this) : null } /> : null }
                     </div>
                 </div>);
     }
 };
 
 App.propTypes = {
-    manifest: PropTypes.object,
+    hosts: PropTypes.array,
+    online: PropTypes.bool,
+    language: PropTypes.string,
+    mergedHosts: PropTypes.instanceOf(Hosts),
+    selectedHosts: PropTypes.instanceOf(Hosts),
+    updatingHosts: PropTypes.instanceOf(Hosts),
 };
 
-export default App;
+const mapStateToProps = (state) => {
+    const { hosts,
+            online,
+            language,
+            selectedHosts,
+            updatingHosts } = state;
+    const hostsList = hostsMapToList(hosts);
+    const mergedHosts = mergeHosts(online, hostsList);
+    return {
+        online,
+        language,
+        mergedHosts,
+        hosts: hostsList,
+        updatingHosts: updatingHosts ? hosts[updatingHosts] : null,
+        selectedHosts: selectedHosts ? (selectedHosts === MERGED_HOSTS_UID ? mergedHosts : hosts[selectedHosts]) : null,
+    };
+}
+
+export default connect(mapStateToProps)(App);

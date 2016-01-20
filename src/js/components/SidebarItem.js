@@ -1,6 +1,7 @@
 import React, { Component, PropTypes } from 'react';
 import cx from 'classnames';
 
+import Hosts from '../backend/hosts';
 import Lang from '../backend/language';
 
 class SidebarItem extends Component {
@@ -29,7 +30,7 @@ class SidebarItem extends Component {
                     <div className="content">
                         <p className="name">{ item.name }</p>
                         <p className="meta">
-                            { !!item.url ? <i className={ "iconfont cloud" + (item.isSyncing ? " syncing" : "")}>&#xe604;</i> : null}
+                            { !!item.url ? <i className={ "iconfont cloud" + (item.isSyncing() ? " syncing" : "")}>&#xe604;</i> : null}
                             <span>{ Lang.get('main.hosts_rules', item.count) }</span>
                         </p>
                     </div>
@@ -40,12 +41,12 @@ class SidebarItem extends Component {
 }
 
 SidebarItem.propTypes = {
-    item: PropTypes.object,
     active: PropTypes.bool,
     onEdit: PropTypes.func,
     onClick: PropTypes.func,
     onRemove: PropTypes.func,
     onStatusChange: PropTypes.func,
+    item: PropTypes.instanceOf(Hosts).isRequired,
 };
 
 export default SidebarItem;
