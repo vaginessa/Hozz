@@ -10,7 +10,9 @@ export default {
 
         'name': 'Name',
         'search': 'Search',
+        'all_hosts': 'All Hosts',
         'system_hosts': 'System Hosts',
+        'untitled_hosts': 'Untitled Hosts',
 
         'text': 'Text',
         'all_files': 'All Files',
@@ -31,8 +33,6 @@ export default {
         'go_to_homepage': 'Please go to $$1 to download latest release.',
     },
     main: {
-        'untitled_hosts': 'Untitled Hosts',
-
         'grant_permission': 'Grant Permission',
         'dont_have_permission': 'You don\'t have the permission to write to hosts file.',
 

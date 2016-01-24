@@ -9,7 +9,8 @@ const SUDO_OPTION = {
     process: {
         options: {
             env: { 'LANG': 'en_US.UTF-8' }
-        }
+        },
+        on: () => {}
     }
 };
 

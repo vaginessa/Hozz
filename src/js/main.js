@@ -18,7 +18,9 @@ titleDOM.innerText = APP_NAME;
 store.dispatch(loadManifest());
 let unsubscribe = store.subscribe(() => {
     store.dispatch(saveManifest());
-    store.dispatch(saveSystemHosts());
+    if (store.getState().should_save_system_hosts) {
+        store.dispatch(saveSystemHosts());
+    }
 });
 
 ReactDOM.render(<Provider store={ store }><App /></Provider>, document.getElementById('app'));

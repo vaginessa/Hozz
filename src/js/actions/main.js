@@ -5,6 +5,7 @@ import io from '../backend/io';
 import log from '../backend/log';
 import Hosts from '../backend/hosts';
 import Lang from '../backend/language';
+import permission from '../backend/permission';
 import { MANIFEST,
          WORKSPACE,
          MERGED_HOSTS_UID,
@@ -24,7 +25,10 @@ export const SWITCH_HOSTS_POSITION = 'SWITCH_HOSTS_POSITION';
 export const CALL_ADD_HOSTS = 'CALL_ADD_HOSTS';
 export const CALL_UPDATE_HOSTS = 'CALL_UPDATE_HOSTS';
 
-export const PERMISSION_SNACKBAR = 'PERMISSION_SNACKBAR';
+export const SHOW_SNACK = 'SHOW_SNACK';
+export const HIDE_SNACK = 'HIDE_SNACK';
+
+export const WRITE_PERMISSION = 'WRITE_PERMISSION';
 
 try {
     mkdirp.sync(WORKSPACE);
@@ -147,7 +151,6 @@ export function mergeHosts (online, hostsList) {
     let totalCount = 0;
     let totalHostsText = '';
     for (let hosts of hostsList) {
-        console.log(hosts)
         if (!online) {
             hosts.stashStatus();
         } else {
@@ -159,11 +162,11 @@ export function mergeHosts (online, hostsList) {
         }
     }
     return new Hosts({
-        uid: MERGED_HOSTS_UID,
-        name: 'All',
+        online: online,
         count: totalCount,
         text: totalHostsText,
-        online: online,
+        uid: MERGED_HOSTS_UID,
+        name: Lang.get('common.all_hosts'),
     });
 }
 
@@ -179,6 +182,24 @@ export function saveManifest () {
     }
 }
 
+const makePermissionSnack = (dispatch) => {
+    return {
+        type: 'danger',
+        text: Lang.get('main.dont_have_permission'),
+        actions: [
+            {
+                name: Lang.get('main.grant_permission'),
+                onClick: () => {
+                    permission.enableFullAccess().then(() => {
+                        dispatch({ type: WRITE_PERMISSION, value: true });
+                        dispatch({ type: HIDE_SNACK });
+                    });
+                }
+            },
+        ]
+    };
+}
+
 export function saveSystemHosts () {
     return (dispatch, getState) => {
         const { online, language, hosts } = getState();
@@ -188,7 +209,8 @@ export function saveSystemHosts () {
                 error.message &&
                 (error.message.indexOf(NO_PERM_ERROR_TAG) > -1 ||
                  error.message.indexOf(NO_PERM_ERROR_TAG_WIN32) > -1)) {
-                dispatch({ type: PERMISSION_SNACKBAR });
+                dispatch({ type: WRITE_PERMISSION, value: false });
+                dispatch({ type: SHOW_SNACK, value: makePermissionSnack(dispatch) });
             }
             log(error);
         });

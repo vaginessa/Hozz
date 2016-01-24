@@ -4,22 +4,20 @@ import Dropzone from 'react-dropzone';
 
 import { EVENT,
          APP_NAME,
-         MERGED_HOSTS_UID,
-         NO_PERM_ERROR_TAG,
-         NO_PERM_ERROR_TAG_WIN32 } from '../constants';
+         MERGED_HOSTS_UID } from '../constants';
 
 import io from '../backend/io';
 import event from '../backend/event';
 import Hosts from '../backend/hosts';
 import Lang from '../backend/language';
 import nw from '../backend/nw.interface';
-import permission from '../backend/permission';
 
-import { addHosts,
+import { HIDE_SNACK,
+         addHosts,
          mergeHosts,
          updateHosts,
          hostsMapToList,
-         setWholeOnline } from '../actions/main';
+         setWholeOnline, } from '../actions/main';
 
 import Editor from './Editor';
 import Sidebar from './Sidebar';
@@ -85,25 +83,7 @@ class App extends Component {
     }
 
     __onSnackDismiss () {
-        this.setState({ snack: null });
-    }
-
-    __onPermissionError () {
-        this.setState({
-            snack: {
-                type: 'danger',
-                text: Lang.get('main.dont_have_permission'),
-                actions: [
-                    {
-                        name: Lang.get('main.grant_permission'),
-                        onClick: () => {
-                            permission.enableFullAccess();
-                            this.__onSnackDismiss();
-                        }
-                    },
-                ]
-            }
-        });
+        this.props.dispatch({ type: HIDE_SNACK });
     }
 
     __onDrop (files) {
@@ -116,8 +96,8 @@ class App extends Component {
     }
 
     render() {
-        const { snack, searchText } = this.state;
-        const { dispatch, hosts, mergedHosts, selectedHosts, updatingHosts } = this.props;
+        const { searchText } = this.state;
+        const { dispatch, snack, hosts, mergedHosts, selectedHosts, updatingHosts } = this.props;
         let list = hosts;
         const selectedUid = selectedHosts ? selectedHosts.uid : '';
         if (searchText) {
@@ -149,7 +129,7 @@ class App extends Component {
                         <Titlebar
                             closeAsHide={ true }
                             title={ selectedHosts ? selectedHosts.name : APP_NAME } />
-                        { snack !== null ?
+                        { snack && snack.text ?
                             <SnackBar
                                 type={ snack.type }
                                 text={ snack.text }
@@ -178,7 +158,8 @@ App.propTypes = {
 };
 
 const mapStateToProps = (state) => {
-    const { hosts,
+    const { snack,
+            hosts,
             online,
             language,
             selectedHosts,
@@ -186,6 +167,7 @@ const mapStateToProps = (state) => {
     const hostsList = hostsMapToList(hosts);
     const mergedHosts = mergeHosts(online, hostsList);
     return {
+        snack,
         online,
         language,
         mergedHosts,

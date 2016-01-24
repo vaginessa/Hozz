@@ -106,7 +106,7 @@ Hosts.createFromText = (text) => {
         text,
         url: '',
         online: false,
-        name: Lang.get('main.untitled_hosts'),
+        name: Lang.get('common.untitled_hosts'),
     });
 }
 
